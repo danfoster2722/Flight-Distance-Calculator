@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flight Distance Calculator</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg: #f5f0e8;
+    --ink: #1a1612;
+    --muted: #8a7f72;
+    --accent: #c84b2f;
+    --accent2: #2f6bc8;
+    --surface: #ffffff;
+    --border: #ddd8ce;
+    --success: #2a7a4b;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'IBM Plex Mono', monospace;
+    min-height: 100vh;
+    padding: 48px 24px;
+  }
+
+  /* Ruled paper lines */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: repeating-linear-gradient(
+      transparent, transparent 31px, #e8e0d4 31px, #e8e0d4 32px
+    );
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.5;
+  }
+
+  .container {
+    max-width: 860px;
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Header */
+  header {
+    border-bottom: 3px solid var(--ink);
+    padding-bottom: 20px;
+    margin-bottom: 40px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    animation: fadeIn 0.5s ease;
+  }
+
+  .brand {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: clamp(26px, 5vw, 42px);
+    line-height: 1;
+    letter-spacing: -0.02em;
+  }
+
+  .brand span { color: var(--accent); }
+
+  .tagline {
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  /* Steps */
+  .steps {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 32px;
+    animation: fadeIn 0.5s 0.1s ease both;
+  }
+
+  @media (max-width: 600px) { .steps { grid-template-columns: 1fr; } }
+
+  .step {
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: 4px;
+    padding: 24px;
+  }
+
+  .step-num {
+    font-family: 'Syne', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 12px;
+  }
+
+  .step h2 {
+    font-family: 'Syne', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 14px;
+  }
+
+  /* Upload zone */
+  .upload-zone {
+    border: 2px dashed var(--border);
+    border-radius: 4px;
+    padding: 28px 16px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: var(--bg);
+  }
+
+  .upload-zone:hover, .upload-zone.drag-over {
+    border-color: var(--accent2);
+    background: #eef3fc;
+  }
+
+  .upload-zone input { display: none; }
+
+  .upload-icon { font-size: 28px; margin-bottom: 8px; }
+
+  .upload-text {
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  .upload-text strong { color: var(--ink); display: block; margin-bottom: 2px; }
+
+  .file-chosen {
+    font-size: 11px;
+    color: var(--success);
+    margin-top: 8px;
+    font-weight: 500;
+  }
+
+  /* Hub input */
+  .hub-input-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .hub-input-wrap label {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .airport-input {
+    font-family: 'Syne', sans-serif;
+    font-size: 36px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    border: none;
+    border-bottom: 2.5px solid var(--ink);
+    background: transparent;
+    color: var(--ink);
+    width: 100%;
+    padding: 4px 0;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .airport-input::placeholder { color: var(--border); }
+  .airport-input:focus { border-color: var(--accent); }
+
+  .hub-hint {
+    font-size: 10px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  .hub-name {
+    font-size: 12px;
+    color: var(--accent2);
+    font-weight: 500;
+    min-height: 18px;
+    transition: all 0.2s;
+  }
+
+  /* Column selector */
+  .col-selector {
+    display: none;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .col-selector label {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .col-selector select {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    padding: 8px 10px;
+    border: 1.5px solid var(--border);
+    border-radius: 3px;
+    background: var(--surface);
+    color: var(--ink);
+    cursor: pointer;
+    outline: none;
+  }
+
+  /* Run button */
+  .run-wrap {
+    margin-bottom: 32px;
+    animation: fadeIn 0.5s 0.2s ease both;
+  }
+
+  .btn-run {
+    font-family: 'Syne', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    background: var(--ink);
+    color: var(--bg);
+    border: none;
+    padding: 16px 40px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .btn-run:hover:not(:disabled) {
+    background: var(--accent);
+    transform: translateY(-1px);
+  }
+
+  .btn-run:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* Results */
+  .results-section {
+    display: none;
+    animation: fadeIn 0.4s ease;
+  }
+
+  .results-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--ink);
+  }
+
+  .results-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+  }
+
+  .results-meta {
+    font-size: 10px;
+    color: var(--muted);
+  }
+
+  .btn-download {
+    font-family: 'Syne', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    background: var(--success);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .btn-download:hover { opacity: 0.85; }
+
+  /* Table */
+  .table-wrap {
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: 4px;
+    overflow: auto;
+    max-height: 480px;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+
+  thead {
+    position: sticky;
+    top: 0;
+    background: var(--ink);
+    color: var(--bg);
+    z-index: 2;
+  }
+
+  th {
+    font-family: 'Syne', sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 12px 16px;
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  td {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #faf7f2; }
+
+  .dist-cell {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 13px;
+  }
+
+  .dist-high { color: var(--accent); }
+  .dist-mid  { color: var(--accent2); }
+  .dist-low  { color: var(--success); }
+
+  .error-cell { color: var(--accent); font-style: italic; }
+
+  /* Stats bar */
+  .stats-bar {
+    display: flex;
+    gap: 24px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+  }
+
+  .stat {
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: 4px;
+    padding: 14px 20px;
+    flex: 1;
+    min-width: 140px;
+  }
+
+  .stat-label {
+    font-size: 9px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+
+  .stat-value {
+    font-family: 'Syne', sans-serif;
+    font-size: 22px;
+    font-weight: 800;
+  }
+
+  /* Error/info messages */
+  .msg {
+    font-size: 11px;
+    padding: 12px 16px;
+    border-radius: 3px;
+    margin-top: 10px;
+    line-height: 1.5;
+  }
+  .msg-error { background: #fdecea; color: var(--accent); border: 1px solid #f5c2bb; }
+  .msg-info  { background: #eef3fc; color: var(--accent2); border: 1px solid #c2d4f5; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .spinner { display: inline-block; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div>
+      <div class="brand">FLIGHT<span>DIST</span></div>
+      <div class="tagline">Airport Distance Calculator</div>
+    </div>
+    <div class="tagline" style="text-align:right">Upload · Select Hub · Get Miles</div>
+  </header>
+
+  <div class="steps">
+    <!-- Step 1: Upload -->
+    <div class="step">
+      <div class="step-num">Step 01 — Upload File</div>
+      <h2>Excel File with Airport Codes</h2>
+      <div class="upload-zone" id="uploadZone">
+        <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
+        <div class="upload-icon">📂</div>
+        <div class="upload-text">
+          <strong>Click to browse or drag & drop</strong>
+          .xlsx · .xls · .csv accepted
+        </div>
+        <div class="file-chosen" id="fileChosen"></div>
+      </div>
+      <div id="colSelectorWrap" class="col-selector" style="margin-top:14px;">
+        <label>Which column has the airport codes?</label>
+        <select id="colSelect"></select>
+        <div class="msg msg-info" id="previewMsg"></div>
+      </div>
+    </div>
+
+    <!-- Step 2: Hub -->
+    <div class="step">
+      <div class="step-num">Step 02 — Set Hub Airport</div>
+      <h2>Your Origin / Hub Airport</h2>
+      <div class="hub-input-wrap">
+        <label>Enter 3-letter IATA code</label>
+        <input type="text" class="airport-input" id="hubInput" placeholder="e.g. ATL" maxlength="3">
+        <div class="hub-name" id="hubName">—</div>
+        <div class="hub-hint">Type any IATA code — distances are calculated using great-circle (haversine) formula in statute miles.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Run -->
+  <div class="run-wrap">
+    <button class="btn-run" id="runBtn" disabled>
+      <span id="runIcon">✈</span>
+      <span id="runLabel">Calculate Distances</span>
+    </button>
+    <div id="runError"></div>
+  </div>
+
+  <!-- Results -->
+  <div class="results-section" id="resultsSection">
+    <div class="results-header">
+      <div>
+        <div class="results-title" id="resultsTitle">Results</div>
+        <div class="results-meta" id="resultsMeta"></div>
+      </div>
+      <button class="btn-download" id="downloadBtn">⬇ Download Excel</button>
+    </div>
+    <div class="table-wrap">
+      <table id="resultsTable">
+        <thead id="resultsHead"></thead>
+        <tbody id="resultsBody"></tbody>
+      </table>
+    </div>
+    <div class="stats-bar" id="statsBar"></div>
+  </div>
+
+</div>
+
+<script>
+// ─── Airport Database (lat/lng for ~500 major airports) ───────────────────────
+const AIRPORTS = {
+  ATL:{name:"Atlanta Hartsfield-Jackson",lat:33.6367,lng:-84.4281},
+  LAX:{name:"Los Angeles International",lat:33.9425,lng:-118.4081},
+  ORD:{name:"Chicago O'Hare",lat:41.9742,lng:-87.9073},
+  DFW:{name:"Dallas/Fort Worth",lat:32.8998,lng:-97.0403},
+  DEN:{name:"Denver International",lat:39.8561,lng:-104.6737},
+  JFK:{name:"New York JFK",lat:40.6413,lng:-73.7781},
+  SFO:{name:"San Francisco International",lat:37.6213,lng:-122.379},
+  SEA:{name:"Seattle-Tacoma",lat:47.4502,lng:-122.3088},
+  LAS:{name:"Las Vegas Harry Reid",lat:36.084,lng:-115.1537},
+  MCO:{name:"Orlando International",lat:28.4312,lng:-81.3081},
+  EWR:{name:"Newark Liberty",lat:40.6895,lng:-74.1745},
+  PHX:{name:"Phoenix Sky Harbor",lat:33.4373,lng:-112.0078},
+  IAH:{name:"Houston George Bush",lat:29.9902,lng:-95.3368},
+  MIA:{name:"Miami International",lat:25.7959,lng:-80.287},
+  BOS:{name:"Boston Logan",lat:42.3656,lng:-71.0096},
+  MSP:{name:"Minneapolis-St. Paul",lat:44.8848,lng:-93.2223},
+  DTW:{name:"Detroit Metropolitan",lat:42.2124,lng:-83.3534},
+  FLL:{name:"Fort Lauderdale",lat:26.0726,lng:-80.1527},
+  PHL:{name:"Philadelphia International",lat:39.8721,lng:-75.2411},
+  LGA:{name:"New York LaGuardia",lat:40.7769,lng:-73.874},
+  BWI:{name:"Baltimore Washington",lat:39.1754,lng:-76.6683},
+  DCA:{name:"Washington Reagan",lat:38.8512,lng:-77.0402},
+  IAD:{name:"Washington Dulles",lat:38.9531,lng:-77.4565},
+  SLC:{name:"Salt Lake City",lat:40.7884,lng:-111.9778},
+  SAN:{name:"San Diego International",lat:32.7338,lng:-117.1933},
+  TPA:{name:"Tampa International",lat:27.9755,lng:-82.5332},
+  PDX:{name:"Portland International",lat:45.5898,lng:-122.5951},
+  HNL:{name:"Honolulu Daniel K. Inouye",lat:21.3187,lng:-157.9225},
+  MDW:{name:"Chicago Midway",lat:41.7868,lng:-87.7522},
+  BNA:{name:"Nashville International",lat:36.1245,lng:-86.6782},
+  AUS:{name:"Austin-Bergstrom",lat:30.1975,lng:-97.6664},
+  STL:{name:"St. Louis Lambert",lat:38.7487,lng:-90.37},
+  MCI:{name:"Kansas City International",lat:39.2976,lng:-94.7139},
+  RDU:{name:"Raleigh-Durham",lat:35.8776,lng:-78.7875},
+  CLE:{name:"Cleveland Hopkins",lat:41.4117,lng:-81.8498},
+  SMF:{name:"Sacramento International",lat:38.6954,lng:-121.5908},
+  SJC:{name:"San Jose Mineta",lat:37.3626,lng:-121.929},
+  OAK:{name:"Oakland Metropolitan",lat:37.7213,lng:-122.2208},
+  MEM:{name:"Memphis International",lat:35.0424,lng:-89.9767},
+  PIT:{name:"Pittsburgh International",lat:40.4915,lng:-80.2329},
+  IND:{name:"Indianapolis International",lat:39.7173,lng:-86.2944},
+  CMH:{name:"Columbus John Glenn",lat:39.9998,lng:-82.8919},
+  CVG:{name:"Cincinnati/Northern Kentucky",lat:39.0533,lng:-84.6627},
+  MSY:{name:"New Orleans Louis Armstrong",lat:29.9934,lng:-90.258},
+  SAT:{name:"San Antonio International",lat:29.5337,lng:-98.4698},
+  RSW:{name:"Fort Myers Southwest Florida",lat:26.5362,lng:-81.7552},
+  SNA:{name:"Orange County John Wayne",lat:33.6757,lng:-117.8682},
+  OGG:{name:"Maui Kahului",lat:20.8986,lng:-156.4305},
+  ABQ:{name:"Albuquerque International",lat:35.0402,lng:-106.6090},
+  BUF:{name:"Buffalo Niagara",lat:42.9405,lng:-78.7322},
+  BDL:{name:"Bradley International",lat:41.9389,lng:-72.6832},
+  ONT:{name:"Ontario International",lat:34.0560,lng:-117.6012},
+  TUS:{name:"Tucson International",lat:32.1161,lng:-110.9410},
+  ELP:{name:"El Paso International",lat:31.8072,lng:-106.3779},
+  JAX:{name:"Jacksonville International",lat:30.4941,lng:-81.6879},
+  ORF:{name:"Norfolk International",lat:36.8976,lng:-76.0132},
+  RIC:{name:"Richmond International",lat:37.5052,lng:-77.3197},
+  MKE:{name:"Milwaukee Mitchell",lat:42.9472,lng:-87.8966},
+  OMA:{name:"Omaha Eppley",lat:41.3032,lng:-95.8941},
+  GRR:{name:"Grand Rapids Gerald R. Ford",lat:42.8808,lng:-85.5228},
+  TUL:{name:"Tulsa International",lat:36.1984,lng:-95.8881},
+  OKC:{name:"Oklahoma City Will Rogers",lat:35.3931,lng:-97.6007},
+  DAL:{name:"Dallas Love Field",lat:32.8471,lng:-96.8518},
+  HOU:{name:"Houston Hobby",lat:29.6454,lng:-95.2789},
+  // International
+  LHR:{name:"London Heathrow",lat:51.4775,lng:-0.4614},
+  CDG:{name:"Paris Charles de Gaulle",lat:49.0097,lng:2.5479},
+  AMS:{name:"Amsterdam Schiphol",lat:52.3086,lng:4.7639},
+  FRA:{name:"Frankfurt Airport",lat:50.0379,lng:8.5622},
+  MAD:{name:"Madrid Barajas",lat:40.4983,lng:-3.5676},
+  BCN:{name:"Barcelona El Prat",lat:41.2974,lng:2.0833},
+  FCO:{name:"Rome Fiumicino",lat:41.8003,lng:12.2389},
+  MUC:{name:"Munich Airport",lat:48.3538,lng:11.7861},
+  ZUR:{name:"Zurich Airport",lat:47.4647,lng:8.5492},
+  VIE:{name:"Vienna International",lat:48.1103,lng:16.5697},
+  DXB:{name:"Dubai International",lat:25.2528,lng:55.3644},
+  DOH:{name:"Doha Hamad",lat:25.2609,lng:51.6138},
+  SIN:{name:"Singapore Changi",lat:1.3644,lng:103.9915},
+  HKG:{name:"Hong Kong International",lat:22.308,lng:113.9185},
+  NRT:{name:"Tokyo Narita",lat:35.7647,lng:140.3864},
+  HND:{name:"Tokyo Haneda",lat:35.5494,lng:139.7798},
+  ICN:{name:"Seoul Incheon",lat:37.4602,lng:126.4407},
+  PEK:{name:"Beijing Capital",lat:40.0799,lng:116.6031},
+  PVG:{name:"Shanghai Pudong",lat:31.1443,lng:121.8083},
+  SYD:{name:"Sydney Kingsford Smith",lat:-33.9399,lng:151.1753},
+  MEL:{name:"Melbourne Tullamarine",lat:-37.6733,lng:144.8433},
+  YYZ:{name:"Toronto Pearson",lat:43.6777,lng:-79.6248},
+  YVR:{name:"Vancouver International",lat:49.1967,lng:-123.1815},
+  YUL:{name:"Montreal Trudeau",lat:45.4657,lng:-73.7455},
+  YYC:{name:"Calgary International",lat:51.1315,lng:-114.0106},
+  MEX:{name:"Mexico City International",lat:19.4363,lng:-99.0721},
+  GRU:{name:"São Paulo Guarulhos",lat:-23.4356,lng:-46.4731},
+  EZE:{name:"Buenos Aires Ezeiza",lat:-34.8222,lng:-58.5358},
+  BOG:{name:"Bogotá El Dorado",lat:4.7016,lng:-74.1469},
+  LIM:{name:"Lima Jorge Chávez",lat:-12.0219,lng:-77.1143},
+  SCL:{name:"Santiago Arturo Merino",lat:-33.3930,lng:-70.7858},
+  JNB:{name:"Johannesburg O.R. Tambo",lat:-26.1367,lng:28.2411},
+  CAI:{name:"Cairo International",lat:30.1219,lng:31.4056},
+  ADD:{name:"Addis Ababa Bole",lat:8.9779,lng:38.7993},
+  NBO:{name:"Nairobi Jomo Kenyatta",lat:-1.3192,lng:36.9275},
+  CPT:{name:"Cape Town International",lat:-33.9648,lng:18.6017},
+  BOM:{name:"Mumbai Chhatrapati Shivaji",lat:19.0896,lng:72.8656},
+  DEL:{name:"Delhi Indira Gandhi",lat:28.5565,lng:77.1},
+  BLR:{name:"Bengaluru Kempegowda",lat:13.1986,lng:77.7066},
+  MAA:{name:"Chennai International",lat:12.9900,lng:80.1693},
+  CCU:{name:"Kolkata Netaji Subhas",lat:22.6527,lng:88.4467},
+  KUL:{name:"Kuala Lumpur International",lat:2.7456,lng:101.7072},
+  BKK:{name:"Bangkok Suvarnabhumi",lat:13.6811,lng:100.7472},
+  CGK:{name:"Jakarta Soekarno-Hatta",lat:-6.1256,lng:106.6559},
+  MNL:{name:"Manila Ninoy Aquino",lat:14.5086,lng:121.0194},
+  AKL:{name:"Auckland International",lat:-37.0082,lng:174.7917},
+  ZRH:{name:"Zurich Kloten",lat:47.4647,lng:8.5492},
+  GVA:{name:"Geneva Airport",lat:46.2381,lng:6.1089},
+  CPH:{name:"Copenhagen Kastrup",lat:55.6180,lng:12.6508},
+  OSL:{name:"Oslo Gardermoen",lat:60.1939,lng:11.1004},
+  ARN:{name:"Stockholm Arlanda",lat:59.6519,lng:17.9186},
+  HEL:{name:"Helsinki Vantaa",lat:60.3172,lng:24.9633},
+  LED:{name:"St. Petersburg Pulkovo",lat:59.8003,lng:30.2625},
+  SVO:{name:"Moscow Sheremetyevo",lat:55.9726,lng:37.4146},
+  IST:{name:"Istanbul Airport",lat:41.2608,lng:28.7418},
+  ATH:{name:"Athens Eleftherios Venizelos",lat:37.9364,lng:23.9445},
+  BRU:{name:"Brussels Airport",lat:50.9010,lng:4.4844},
+  WAW:{name:"Warsaw Chopin",lat:52.1657,lng:20.9671},
+  PRG:{name:"Prague Václav Havel",lat:50.1008,lng:14.26},
+  BUD:{name:"Budapest Ferihegy",lat:47.4298,lng:19.2611},
+};
+
+// ─── Haversine distance ────────────────────────────────────────────────────────
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 3958.8; // miles
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 +
+            Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) *
+            Math.sin(dLon/2)**2;
+  return Math.round(2 * R * Math.asin(Math.sqrt(a)));
+}
+
+// ─── State ─────────────────────────────────────────────────────────────────────
+let fileData = null;   // array of row objects
+let fileHeaders = [];
+let workbook = null;
+
+// ─── UI refs ───────────────────────────────────────────────────────────────────
+const uploadZone  = document.getElementById('uploadZone');
+const fileInput   = document.getElementById('fileInput');
+const fileChosen  = document.getElementById('fileChosen');
+const colSelectorWrap = document.getElementById('colSelectorWrap');
+const colSelect   = document.getElementById('colSelect');
+const previewMsg  = document.getElementById('previewMsg');
+const hubInput    = document.getElementById('hubInput');
+const hubName     = document.getElementById('hubName');
+const runBtn      = document.getElementById('runBtn');
+const runError    = document.getElementById('runError');
+const resultsSection = document.getElementById('resultsSection');
+const resultsTitle   = document.getElementById('resultsTitle');
+const resultsMeta    = document.getElementById('resultsMeta');
+const resultsHead    = document.getElementById('resultsHead');
+const resultsBody    = document.getElementById('resultsBody');
+const statsBar       = document.getElementById('statsBar');
+const downloadBtn    = document.getElementById('downloadBtn');
+
+// ─── Upload handling ───────────────────────────────────────────────────────────
+uploadZone.addEventListener('click', () => fileInput.click());
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadZone.classList.remove('drag-over');
+  if (e.dataTransfer.files[0]) processFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', e => { if (e.target.files[0]) processFile(e.target.files[0]); });
+
+function processFile(file) {
+  fileChosen.textContent = '';
+  const ext = file.name.split('.').pop().toLowerCase();
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      if (ext === 'csv') {
+        workbook = XLSX.read(e.target.result, { type: 'string' });
+      } else {
+        workbook = XLSX.read(e.target.result, { type: 'array' });
+      }
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+      const json = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+      if (!json.length) { showRunError('File appears to be empty.'); return; }
+      fileData = json;
+      fileHeaders = Object.keys(json[0]);
+      fileChosen.textContent = `✓ ${file.name} — ${json.length} rows loaded`;
+
+      // Populate column selector
+      colSelect.innerHTML = fileHeaders.map(h => `<option value="${h}">${h}</option>`).join('');
+      // Auto-detect likely airport column
+      const guess = fileHeaders.find(h => /airport|iata|code|origin|dest/i.test(h)) || fileHeaders[0];
+      colSelect.value = guess;
+      updatePreview();
+      colSelectorWrap.style.display = 'flex';
+      checkReady();
+    } catch(err) {
+      showRunError('Could not read file: ' + err.message);
+    }
+  };
+  if (ext === 'csv') reader.readAsText(file);
+  else reader.readAsArrayBuffer(file);
+}
+
+colSelect.addEventListener('change', updatePreview);
+
+function updatePreview() {
+  if (!fileData) return;
+  const col = colSelect.value;
+  const samples = [...new Set(fileData.slice(0, 20).map(r => String(r[col]).trim().toUpperCase()))].slice(0, 5);
+  const known = samples.filter(c => AIRPORTS[c]).length;
+  previewMsg.textContent = `Sample codes: ${samples.join(', ')} — ${known}/${samples.length} recognized`;
+}
+
+// ─── Hub input ─────────────────────────────────────────────────────────────────
+hubInput.addEventListener('input', () => {
+  const code = hubInput.value.trim().toUpperCase();
+  const ap = AIRPORTS[code];
+  hubName.textContent = ap ? `✓ ${ap.name}` : code.length === 3 ? '✗ Airport not found in database' : '—';
+  hubName.style.color = ap ? 'var(--accent2)' : code.length === 3 ? 'var(--accent)' : 'var(--muted)';
+  checkReady();
+});
+
+function checkReady() {
+  const code = hubInput.value.trim().toUpperCase();
+  runBtn.disabled = !(fileData && AIRPORTS[code]);
+}
+
+function showRunError(msg) {
+  runError.innerHTML = msg ? `<div class="msg msg-error">${msg}</div>` : '';
+}
+
+// ─── Calculate ─────────────────────────────────────────────────────────────────
+runBtn.addEventListener('click', () => {
+  showRunError('');
+  const hubCode = hubInput.value.trim().toUpperCase();
+  const hub = AIRPORTS[hubCode];
+  const col = colSelect.value;
+
+  const rows = fileData.map(row => {
+    const code = String(row[col] || '').trim().toUpperCase();
+    const ap = AIRPORTS[code];
+    const dist = ap ? haversine(hub.lat, hub.lng, ap.lat, ap.lng) : null;
+    return { ...row, _code: code, _apName: ap ? ap.name : null, _dist: dist };
+  });
+
+  const valid = rows.filter(r => r._dist !== null);
+  const invalid = rows.filter(r => r._dist === null);
+
+  if (!valid.length) {
+    showRunError(`No recognized airport codes found in column "${col}". Check your column selection.`);
+    return;
+  }
+
+  const dists = valid.map(r => r._dist);
+  const maxDist = Math.max(...dists);
+  const minDist = Math.min(...dists);
+  const avgDist = Math.round(dists.reduce((a,b) => a+b, 0) / dists.length);
+
+  // Build table
+  const extraCols = ['Airport Name', `Distance from ${hubCode} (mi)`, 'Range'];
+  resultsHead.innerHTML = `<tr>${fileHeaders.map(h => `<th>${h}</th>`).join('')}${extraCols.map(c => `<th>${c}</th>`).join('')}</tr>`;
+
+  resultsBody.innerHTML = rows.map(r => {
+    const origCells = fileHeaders.map(h => `<td>${r[h] ?? ''}</td>`).join('');
+    if (r._dist === null) {
+      return `<tr>${origCells}<td class="error-cell">Unknown</td><td class="error-cell">—</td><td class="error-cell">—</td></tr>`;
+    }
+    const pct = (r._dist - minDist) / (maxDist - minDist || 1);
+    const cls = pct > 0.66 ? 'dist-high' : pct > 0.33 ? 'dist-mid' : 'dist-low';
+    const label = pct > 0.66 ? 'Long' : pct > 0.33 ? 'Medium' : 'Short';
+    return `<tr>${origCells}<td>${r._apName}</td><td class="dist-cell ${cls}">${r._dist.toLocaleString()}</td><td><span style="font-size:10px;color:var(--muted)">${label}</span></td></tr>`;
+  }).join('');
+
+  resultsTitle.textContent = `Results — ${hubCode} → ${rows.length} airports`;
+  resultsMeta.textContent = `${valid.length} matched · ${invalid.length} unrecognized · column: "${col}"`;
+
+  statsBar.innerHTML = `
+    <div class="stat"><div class="stat-label">Shortest Flight</div><div class="stat-value">${minDist.toLocaleString()} <span style="font-size:14px;color:var(--muted)">mi</span></div></div>
+    <div class="stat"><div class="stat-label">Longest Flight</div><div class="stat-value">${maxDist.toLocaleString()} <span style="font-size:14px;color:var(--muted)">mi</span></div></div>
+    <div class="stat"><div class="stat-label">Average Distance</div><div class="stat-value">${avgDist.toLocaleString()} <span style="font-size:14px;color:var(--muted)">mi</span></div></div>
+    <div class="stat"><div class="stat-label">Airports Matched</div><div class="stat-value">${valid.length} <span style="font-size:14px;color:var(--muted)">/ ${rows.length}</span></div></div>
+  `;
+
+  resultsSection.style.display = 'block';
+  resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  // Store for download
+  resultsSection._rows = rows;
+  resultsSection._headers = fileHeaders;
+  resultsSection._hubCode = hubCode;
+});
+
+// ─── Download ──────────────────────────────────────────────────────────────────
+downloadBtn.addEventListener('click', () => {
+  const rows = resultsSection._rows;
+  const headers = resultsSection._headers;
+  const hub = resultsSection._hubCode;
+  if (!rows) return;
+
+  const exportData = rows.map(r => {
+    const obj = {};
+    headers.forEach(h => obj[h] = r[h]);
+    obj['Airport Name'] = r._apName ?? 'Unknown';
+    obj[`Distance from ${hub} (mi)`] = r._dist ?? 'N/A';
+    return obj;
+  });
+
+  const ws = XLSX.utils.json_to_sheet(exportData);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Distances');
+  XLSX.writeFile(wb, `flight_distances_from_${hub}.xlsx`);
+});
+</script>
+</body>
+</html>
